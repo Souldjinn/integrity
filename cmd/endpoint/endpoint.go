@@ -9,6 +9,7 @@ import (
 	"log"
 	"fmt"
 	"encoding/json"
+	"flag"
 )
 
 type Result struct {
@@ -17,6 +18,8 @@ type Result struct {
 }
 
 func main() {
+	port := flag.Int("p", 3456, "port")
+	flag.Parse()
 	mux := http.DefaultServeMux
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		result := Result{
@@ -29,5 +32,6 @@ func main() {
 			fmt.Fprint(w, string(v))
 		}
 	})
-	log.Fatal(http.ListenAndServe("0.0.0.0:3456", mux))
+	fmt.Printf(fmt.Sprintf("Serving on 0.0.0.0:%d\n", *port))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", *port), mux))
 }

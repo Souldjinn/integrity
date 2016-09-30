@@ -2,10 +2,14 @@
 go install github.com/bigcommerce-labs/integrity/cmd/integrity
 
 go install github.com/bigcommerce-labs/integrity/cmd/endpoint
-endpoint &
-PID=$!
+endpoint -p 3456 &
+PIDX=$!
+
+endpoint -p 3457 &
+PIDY=$!
+
 sleep 2
-trap "kill $PID" SIGINT SIGTERM EXIT
+trap "kill $PIDX; kill $PIDY" SIGINT SIGTERM EXIT
 
 integrity
 echo
