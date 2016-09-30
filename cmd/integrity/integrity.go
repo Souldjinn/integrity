@@ -9,13 +9,31 @@ import (
 	"io/ioutil"
 )
 
-func main() {
-	fmt.Println("Act with integrity.")
-	check("http://0.0.0.0:3456/1234/test/diagnostic1")
-	check("http://0.0.0.0:3457/1234/test/diagnostic1")
+type Test struct {
+	Name string
+	Target string
 }
 
-func check(url string) {
+func main() {
+	fmt.Println("Act with integrity.")
+
+	tests := []Test{
+		{
+			Name: "6-diagnostic1",
+			Target: "http://0.0.0.0:3456/1234/test/diagnostic1",
+		},
+		{
+			Name: "7-diagnostic1",
+			Target: "http://0.0.0.0:3457/1234/test/diagnostic1",
+		},
+	}
+
+	for _, t := range tests {
+		check(t.Name, t.Target)
+	}
+}
+
+func check(name string, url string) {
 	client := http.DefaultClient
 
 	resp, err := client.Get(url)
@@ -28,5 +46,5 @@ func check(url string) {
 		panic(err)
 	}
 
-	fmt.Printf("%s:\n%s\n", url, body)
+	fmt.Printf("%s:\n%s\n", name, body)
 }
