@@ -24,9 +24,9 @@ func main() {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		result := Result{
 			Result: true,
-			Note: "testing the tests",
+			Note: fmt.Sprintf("test ran on %d and %s", *port, r.URL.Path),
 		}
-		if v, err := json.MarshalIndent(result, "", " "); err != nil {
+		if v, err := json.MarshalIndent(result, "", "  "); err != nil {
 			panic(err)
 		} else {
 			fmt.Fprint(w, string(v))
