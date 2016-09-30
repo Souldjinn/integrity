@@ -1,6 +1,15 @@
-// Integrity executes integrity tests against endpoints on
-// services.
-
+// Integrity executes integrity tests against resources
+// on multiple services.
+//
+// Theory of operation:
+//  - each service exposes an endpoint to run diagnostic
+//    tests.
+//
+//  - tests check the integrity of a resource on the
+//    service. A major assumption is that each resource
+//    has a singular, unique id given a url/path and
+//    that ids are consistent across services.
+//
 package main
 
 import (
@@ -11,52 +20,32 @@ import (
 
 type Test struct {
 	Name string
-	Host string
 	Test string
-}
-
-type Target struct {
-	Name string
-	Host map[string]string
 }
 
 func main() {
 	fmt.Println("Act with integrity.")
 
-	targets := []Target {
-		{
-			Name: "tgt-1234",
-			Host: map[string]string{
-				"3456": "http://0.0.0.0:3456/1234/test/",
-				"3457": "http://0.0.0.0:3457/1234/test/",
-			},
-		},
-		{
-			Name: "tgt-5556",
-			Host: map[string]string{
-				"3456": "http://0.0.0.0:3456/5556/test/",
-				"3457": "http://0.0.0.0:3457/5556/test/",
-			},
-		},
+	targets := []string {
+		"1234",
+		"5556",
 	}
 
 	tests := []Test{
 		{
 			Name: "6-diagnostic1",
-			Host: "3456",
-			Test: "xyz",
+			Test: "http://0.0.0.0:3456/%s/test/diagnostic1",
 		},
 		{
 			Name: "7-diagnostic1",
-			Host: "3457",
-			Test: "abc",
+			Test: "http://0.0.0.0:3457/%s/test/diagnostic2",
 		},
 	}
 
 	// outer product of targets and tests.
 	for _, tgt := range targets {
 		for _, t := range tests {
-			check(fmt.Sprintf("%s -> %s", tgt.Name, t.Name), fmt.Sprintf("%s/%s", tgt.Host[t.Host], t.Test))
+			check(fmt.Sprintf("%s -> %s", tgt, t.Name), fmt.Sprintf(t.Test, tgt))
 		}
 	}
 }
