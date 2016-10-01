@@ -18,6 +18,12 @@ import (
 	"io/ioutil"
 )
 
+type Panel struct {
+	Name string
+	Targets []string
+	Tests []Test
+}
+
 type Test struct {
 	Name string
 	Test string
@@ -26,26 +32,52 @@ type Test struct {
 func main() {
 	fmt.Println("Act with integrity.")
 
-	targets := []string {
-		"1234",
-		"5556",
-	}
-
-	tests := []Test{
-		{
-			Name: "6-diagnostic1",
-			Test: "http://0.0.0.0:3456/%s/test/diagnostic1",
+	panels := []Panel{
+		Panel{
+			Name: "Distributed Diagnostics",
+			Targets: []string{
+				"1234",
+				"5556",
+			},
+			Tests: []Test{
+				{
+					Name: "6-diagnostic1",
+					Test: "http://0.0.0.0:3456/%s/test/diagnostic1",
+				},
+				{
+					Name: "7-diagnostic1",
+					Test: "http://0.0.0.0:3457/%s/test/diagnostic2",
+				},
+			},
 		},
-		{
-			Name: "7-diagnostic1",
-			Test: "http://0.0.0.0:3457/%s/test/diagnostic2",
+		Panel{
+			Name: "Secondary Suite",
+			Targets: []string{
+				"1234",
+				"5556",
+				"7891",
+				"4444",
+			},
+			Tests: []Test{
+				{
+					Name: "6-diagnostic2",
+					Test: "http://0.0.0.0:3456/%s/test/xyz",
+				},
+				{
+					Name: "7-diagnostic2",
+					Test: "http://0.0.0.0:3457/%s/test/abc",
+				},
+			},
 		},
 	}
 
 	// outer product of targets and tests.
-	for _, tgt := range targets {
-		for _, t := range tests {
-			check(fmt.Sprintf("%s -> %s", tgt, t.Name), fmt.Sprintf(t.Test, tgt))
+	for _, p := range panels {
+		fmt.Printf("==== %s ====\n", p.Name)
+		for _, tgt := range p.Targets {
+			for _, t := range p.Tests {
+				check(fmt.Sprintf("%s -> %s", tgt, t.Name), fmt.Sprintf(t.Test, tgt))
+			}
 		}
 	}
 }
