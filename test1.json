@@ -1,0 +1,16 @@
+{
+  "targets": [
+    "1234",
+    "5556"
+  ],
+  "tests": [
+    {
+      "name": "6-diagnostic1",
+      "path": "http://0.0.0.0:3456/%s/test/diagnostic1"
+    },
+    {
+      "name": "7-diagnostic1",
+      "path": "http://0.0.0.0:3457/%s/test/diagnostic2"
+    }
+  ]
+}

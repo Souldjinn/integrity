@@ -18,27 +18,18 @@ import (
 	"io/ioutil"
 	"encoding/json"
 	"time"
+	"os"
 )
-
-type Panel struct {
-	Name string
-	Targets []string
-	Tests []Test
-}
 
 type Test struct {
 	Name string
-	Test string
-}
-
-type JsonTestResult struct {
-	Result bool
-	Note string
+	Path string
 }
 
 type TestResult struct {
 	TestCase
-	JsonTestResult
+	Result bool
+	Note string
 }
 
 type TestCase struct {
@@ -48,47 +39,20 @@ type TestCase struct {
 	Target string
 }
 
+type Task struct {
+	Targets []string
+	Tests   []Test
+}
+
 func main() {
 	fmt.Println("Act with integrity.")
 
-	panels := []Panel{
-		Panel{
-			Name: "Distributed Diagnostics",
-			Targets: []string{
-				"1234",
-				"5556",
-			},
-			Tests: []Test{
-				{
-					Name: "6-diagnostic1",
-					Test: "http://0.0.0.0:3456/%s/test/diagnostic1",
-				},
-				{
-					Name: "7-diagnostic1",
-					Test: "http://0.0.0.0:3457/%s/test/diagnostic2",
-				},
-			},
-		},
-		Panel{
-			Name: "Secondary Suite",
-			Targets: []string{
-				"1234",
-				"5556",
-				"7891",
-				"4444",
-			},
-			Tests: []Test{
-				{
-					Name: "6-diagnostic2",
-					Test: "http://0.0.0.0:3456/%s/test/xyz",
-				},
-				{
-					Name: "7-diagnostic2",
-					Test: "http://0.0.0.0:3457/%s/test/abc",
-				},
-			},
-		},
+	dat, err := ioutil.ReadFile(os.Args[1])
+	if err != nil {
+		panic(err)
 	}
+	var p Task
+	json.Unmarshal(dat, &p)
 
 	// outer product of targets and tests.
 	id := 1;
@@ -96,18 +60,15 @@ func main() {
 	in := make(chan TestCase)
 	Print(Retrieve(in))
 
-	for _, p := range panels {
-		for _, tgt := range p.Targets {
-			for _, t := range p.Tests {
-				c := TestCase{}
-				c.Test.Test = t.Test
-				c.Name = t.Name
-				c.Target = tgt
-				c.RunID = id
-				in <- c
-			}
+	for _, tgt := range p.Targets {
+		for _, t := range p.Tests {
+			c := TestCase{}
+			c.Path = t.Path
+			c.Name = t.Name
+			c.Target = tgt
+			c.RunID = id
+			in <- c
 		}
-		id++
 	}
 }
 
@@ -117,7 +78,7 @@ func Retrieve(in <-chan TestCase) (<-chan TestResult) {
 		for i := range in {
 			client := http.DefaultClient
 
-			resp, err := client.Get(fmt.Sprintf(i.Test.Test, i.Target))
+			resp, err := client.Get(fmt.Sprintf(i.Path, i.Target))
 			if err != nil {
 				panic(err)
 			}
@@ -127,13 +88,18 @@ func Retrieve(in <-chan TestCase) (<-chan TestResult) {
 				panic(err)
 			}
 
-			var r JsonTestResult
+			var r struct {
+				Result bool
+				Note string
+			}
 			err = json.Unmarshal(body, &r)
 			if err != nil {
 				panic(err)
 			}
 
-			tr := TestResult{i, r}
+			tr := TestResult{TestCase: i}
+			tr.Result = r.Result
+			tr.Note = r.Note
 			tr.RunTime = time.Now()
 			out <- tr
 		}
