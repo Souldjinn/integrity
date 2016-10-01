@@ -21,27 +21,43 @@ import (
 	"os"
 )
 
-type Test struct {
+// TestCase is a pipeline data structure.
+type TestCase struct {
+	TaskID int
 	Name string
 	Path string
-}
-
-type TestResult struct {
-	TestCase
-	Result bool
-	Note string
-}
-
-type TestCase struct {
-	RunID int
-	RunTime time.Time
-	Test
 	Target string
 }
 
+// Task records the parameters of a test run.
 type Task struct {
+	// resource identifier to find this task again.
+	TaskID int `json:"-"`
+	// defines a list of resources to target
 	Targets []string
-	Tests   []Test
+	// defines a list of tests to run by path
+	Tests   []struct{
+		// name unifies lets you compare results across tasks and targets, even if path changes
+		Name string
+		// path is a URL with %s that takes a target and gets back results
+		Path string
+	}
+}
+
+// Result records the result of a single test run for a task.
+type Result struct {
+	// taskID this result was retrieved for.
+	TaskID int
+	// test name - the task can be used to recover the path
+	Name string
+	// target name - used with path, can reconstruct URL.
+	Target string
+	// time when result retrieved.
+	RunTime time.Time
+	// result value
+	Result bool
+	// human-readable explanation.
+	Note string
 }
 
 func main() {
@@ -55,25 +71,26 @@ func main() {
 	json.Unmarshal(dat, &p)
 
 	// outer product of targets and tests.
-	id := 1;
+	p.TaskID = 1
 
 	in := make(chan TestCase)
 	Print(Retrieve(in))
 
 	for _, tgt := range p.Targets {
 		for _, t := range p.Tests {
-			c := TestCase{}
-			c.Path = t.Path
-			c.Name = t.Name
-			c.Target = tgt
-			c.RunID = id
-			in <- c
+			in <- TestCase{
+				Path: t.Path,
+				Name: t.Name,
+				Target: tgt,
+				TaskID: p.TaskID,
+			}
 		}
 	}
+	close(in)
 }
 
-func Retrieve(in <-chan TestCase) (<-chan TestResult) {
-	out := make(chan TestResult)
+func Retrieve(in <-chan TestCase) (<-chan Result) {
+	out := make(chan Result)
 	go func() {
 		for i := range in {
 			client := http.DefaultClient
@@ -97,7 +114,10 @@ func Retrieve(in <-chan TestCase) (<-chan TestResult) {
 				panic(err)
 			}
 
-			tr := TestResult{TestCase: i}
+			tr := Result{}
+			tr.TaskID = i.TaskID
+			tr.Name = i.Name
+			tr.Target = i.Target
 			tr.Result = r.Result
 			tr.Note = r.Note
 			tr.RunTime = time.Now()
@@ -108,10 +128,10 @@ func Retrieve(in <-chan TestCase) (<-chan TestResult) {
 	return out
 }
 
-func Print(in <-chan TestResult) {
+func Print(in <-chan Result) {
 	go func() {
 		for i := range in {
-			fmt.Printf("  #%d %s @ %s \n    %v -> %s\n",  i.RunID, i.Name, i.RunTime.Format(time.RFC3339), i.Result, i.Note)
+			fmt.Printf("  #%d %s @ %s \n    %v -> %s\n",  i.TaskID, i.Name, i.RunTime.Format(time.RFC3339), i.Result, i.Note)
 		}
 	}()
 }
