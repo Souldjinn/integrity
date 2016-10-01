@@ -31,9 +31,21 @@ type Test struct {
 	Test string
 }
 
-type TestResult struct {
+type JsonTestResult struct {
 	Result bool
 	Note string
+}
+
+type TestResult struct {
+	TestCase
+	JsonTestResult
+}
+
+type TestCase struct {
+	RunID int
+	RunTime time.Time
+	Test
+	Target string
 }
 
 func main() {
@@ -80,35 +92,60 @@ func main() {
 
 	// outer product of targets and tests.
 	id := 1;
+
+	in := make(chan TestCase)
+	Print(Retrieve(in))
+
 	for _, p := range panels {
-		fmt.Printf(">> %s (Run #%d @ %s)\n", p.Name, id, time.Now().Format(time.RFC3339))
 		for _, tgt := range p.Targets {
 			for _, t := range p.Tests {
-				check(id, fmt.Sprintf("%s -> %s", tgt, t.Name), fmt.Sprintf(t.Test, tgt))
+				c := TestCase{}
+				c.Test.Test = t.Test
+				c.Name = t.Name
+				c.Target = tgt
+				c.RunID = id
+				in <- c
 			}
 		}
 		id++
 	}
 }
 
-func check(runID int, name string, url string) {
-	client := http.DefaultClient
+func Retrieve(in <-chan TestCase) (<-chan TestResult) {
+	out := make(chan TestResult)
+	go func() {
+		for i := range in {
+			client := http.DefaultClient
 
-	resp, err := client.Get(url)
-	if err != nil {
-		panic(err)
-	}
+			resp, err := client.Get(fmt.Sprintf(i.Test.Test, i.Target))
+			if err != nil {
+				panic(err)
+			}
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		panic(err)
-	}
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				panic(err)
+			}
 
-	var r TestResult
-	err = json.Unmarshal(body, &r)
-	if err != nil {
-		panic(err)
-	}
+			var r JsonTestResult
+			err = json.Unmarshal(body, &r)
+			if err != nil {
+				panic(err)
+			}
 
-	fmt.Printf("  #%d %s @ %s \n    %v -> %s\n",  runID, name, time.Now().Format(time.RFC3339), r.Result, r.Note)
+			tr := TestResult{i, r}
+			tr.RunTime = time.Now()
+			out <- tr
+		}
+		close(out)
+	}()
+	return out
+}
+
+func Print(in <-chan TestResult) {
+	go func() {
+		for i := range in {
+			fmt.Printf("  #%d %s @ %s \n    %v -> %s\n",  i.RunID, i.Name, i.RunTime.Format(time.RFC3339), i.Result, i.Note)
+		}
+	}()
 }

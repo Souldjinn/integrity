@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"encoding/json"
 	"flag"
+	"time"
 )
 
 type Result struct {
@@ -22,6 +23,7 @@ func main() {
 	flag.Parse()
 	mux := http.DefaultServeMux
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(2*time.Second)
 		result := Result{
 			Result: true,
 			Note: fmt.Sprintf("test ran on %d and %s", *port, r.URL.Path),
