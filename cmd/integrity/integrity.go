@@ -27,6 +27,7 @@ type TestCase struct {
 	Name string
 	Path string
 	Target string
+	Callback chan Result
 }
 
 // Task records the parameters of a test run.
@@ -79,6 +80,12 @@ func main() {
 // scheduled.
 func taskJob(id int, file string) cron.FuncJob {
 	return func() {
+		// TODO http worker queue
+		// need to send a channel that the http results can be
+		// fed back into.
+
+		// TODO in memory storage
+
 		fmt.Printf("Running %d", id)
 		dat, err := ioutil.ReadFile(file)
 		if err != nil {
@@ -91,8 +98,16 @@ func taskJob(id int, file string) cron.FuncJob {
 		p.TaskID = id
 
 		in := make(chan TestCase)
-		Print(Retrieve(in))
+		callback := make(chan Result)
+		go func() {
+			for i := range callback {
+				fmt.Printf("  #%d %s @ %s \n    %v -> %s\n",  i.TaskID, i.Name, i.RunTime.Format(time.RFC3339), i.Result, i.Note)
+			}
+		}()
 
+		Retrieve(in)
+
+		// sends outer product of targets and test to http pipeline.
 		for _, tgt := range p.Targets {
 			for _, t := range p.Tests {
 				in <- TestCase{
@@ -100,6 +115,7 @@ func taskJob(id int, file string) cron.FuncJob {
 					Name: t.Name,
 					Target: tgt,
 					TaskID: p.TaskID,
+					Callback: callback,
 				}
 			}
 		}
@@ -107,8 +123,7 @@ func taskJob(id int, file string) cron.FuncJob {
 	}
 }
 
-func Retrieve(in <-chan TestCase) (<-chan Result) {
-	out := make(chan Result)
+func Retrieve(in <-chan TestCase) {
 	go func() {
 		for i := range in {
 			client := http.DefaultClient
@@ -139,17 +154,7 @@ func Retrieve(in <-chan TestCase) (<-chan Result) {
 			tr.Result = r.Result
 			tr.Note = r.Note
 			tr.RunTime = time.Now()
-			out <- tr
-		}
-		close(out)
-	}()
-	return out
-}
-
-func Print(in <-chan Result) {
-	go func() {
-		for i := range in {
-			fmt.Printf("  #%d %s @ %s \n    %v -> %s\n",  i.TaskID, i.Name, i.RunTime.Format(time.RFC3339), i.Result, i.Note)
+			i.Callback <- tr
 		}
 	}()
 }
