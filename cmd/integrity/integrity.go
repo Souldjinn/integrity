@@ -24,7 +24,7 @@ type TestCase struct {
 type Task struct {
 	Schedule string
 	// resource identifier to find this task again.
-	TaskName string
+	TaskName string `json:"-"`
 	// defines a list of resources to target
 	Targets []string
 	// defines a list of tests to run by path
@@ -55,7 +55,6 @@ type Result struct {
 func main() {
 	fmt.Println("Act with integrity.")
 	// TODO kill zombie tasks
-	// TODO load up list of tasks based on folder in args.
 	// TODO serve result sets live
 	// TODO serve status (# routines, memory, etc)
 	// TODO wire in statsd
@@ -82,6 +81,10 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
+
+		base := filepath.Base(f)
+		p.TaskName = base[0:len(base)-len(filepath.Ext(base))]
+
 		c.AddFunc(p.Schedule, taskJob(p, runner))
 	}
 	c.Start()
