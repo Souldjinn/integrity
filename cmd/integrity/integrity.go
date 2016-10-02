@@ -1,15 +1,3 @@
-// Integrity executes integrity tests against resources
-// on multiple services.
-//
-// Theory of operation:
-//  - each service exposes an endpoint to run diagnostic
-//    tests.
-//
-//  - tests check the integrity of a resource on the
-//    service. A major assumption is that each resource
-//    has a singular, unique id given a url/path and
-//    that ids are consistent across services.
-//
 package main
 
 import (
@@ -19,6 +7,9 @@ import (
 	"encoding/json"
 	"time"
 	"github.com/robfig/cron"
+	"math/rand"
+	"path/filepath"
+	"os"
 )
 
 // TestCase is a pipeline data structure.
@@ -63,7 +54,11 @@ type Result struct {
 
 func main() {
 	fmt.Println("Act with integrity.")
-
+	// TODO kill zombie tasks
+	// TODO load up list of tasks based on folder in args.
+	// TODO serve result sets live
+	// TODO serve status (# routines, memory, etc)
+	// TODO wire in statsd
 
 	runner := make(chan TestCase)
 	// number of retrieval request workers.
@@ -71,9 +66,24 @@ func main() {
 		Retrieve(runner)
 	}
 
+	// add all the tasks.
+	a, err := filepath.Glob(fmt.Sprintf("%s*.json", os.Args[1]))
+	if err != nil {
+		panic(err)
+	}
 	c := cron.New()
-	c.AddFunc("@every 10s", taskJob(1, "test1.json", runner))
-	c.AddFunc("@every 10s", taskJob(2, "test2.json", runner))
+	for _, f := range a {
+		dat, err := ioutil.ReadFile(f)
+		if err != nil {
+			panic(err)
+		}
+		var p Task
+		err = json.Unmarshal(dat, &p)
+		if err != nil {
+			panic(err)
+		}
+		c.AddFunc("@every 10s", taskJob(1, p, runner))
+	}
 	c.Start()
 
 	// wait forever and let cron do its thing- may
@@ -85,17 +95,10 @@ func main() {
 
 // taskJob represents a diagnostic testing task that can be
 // scheduled.
-func taskJob(id int, file string, runner chan TestCase) cron.FuncJob {
+func taskJob(id int, p Task, runner chan TestCase) cron.FuncJob {
 	return func() {
-		// TODO in memory storage
-
+		id = rand.Int()
 		fmt.Printf("Running %d\n", id)
-		dat, err := ioutil.ReadFile(file)
-		if err != nil {
-			panic(err)
-		}
-		var p Task
-		json.Unmarshal(dat, &p)
 
 		// outer product of targets and tests.
 		p.TaskID = id

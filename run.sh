@@ -11,6 +11,6 @@ PIDY=$!
 sleep 2
 trap "kill $PIDX; kill $PIDY" SIGINT SIGTERM EXIT
 
-integrity
+integrity ./
 
 echo
