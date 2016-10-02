@@ -64,9 +64,16 @@ type Result struct {
 func main() {
 	fmt.Println("Act with integrity.")
 
+
+	runner := make(chan TestCase)
+	// number of retrieval request workers.
+	for w := 0; w < 4; w++ {
+		Retrieve(runner)
+	}
+
 	c := cron.New()
-	c.AddFunc("@every 10s", taskJob(1, "test1.json"))
-	c.AddFunc("@every 10s", taskJob(2, "test2.json"))
+	c.AddFunc("@every 10s", taskJob(1, "test1.json", runner))
+	c.AddFunc("@every 10s", taskJob(2, "test2.json", runner))
 	c.Start()
 
 	// wait forever and let cron do its thing- may
@@ -78,7 +85,7 @@ func main() {
 
 // taskJob represents a diagnostic testing task that can be
 // scheduled.
-func taskJob(id int, file string) cron.FuncJob {
+func taskJob(id int, file string, runner chan TestCase) cron.FuncJob {
 	return func() {
 		// TODO http worker queue
 		// need to send a channel that the http results can be
@@ -86,7 +93,7 @@ func taskJob(id int, file string) cron.FuncJob {
 
 		// TODO in memory storage
 
-		fmt.Printf("Running %d", id)
+		fmt.Printf("Running %d\n", id)
 		dat, err := ioutil.ReadFile(file)
 		if err != nil {
 			panic(err)
@@ -97,7 +104,6 @@ func taskJob(id int, file string) cron.FuncJob {
 		// outer product of targets and tests.
 		p.TaskID = id
 
-		in := make(chan TestCase)
 		callback := make(chan Result)
 		go func() {
 			for i := range callback {
@@ -105,12 +111,10 @@ func taskJob(id int, file string) cron.FuncJob {
 			}
 		}()
 
-		Retrieve(in)
-
 		// sends outer product of targets and test to http pipeline.
 		for _, tgt := range p.Targets {
 			for _, t := range p.Tests {
-				in <- TestCase{
+				runner <- TestCase{
 					Path: t.Path,
 					Name: t.Name,
 					Target: tgt,
@@ -119,7 +123,6 @@ func taskJob(id int, file string) cron.FuncJob {
 				}
 			}
 		}
-		close(in)
 	}
 }
 
