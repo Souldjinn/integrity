@@ -7,14 +7,13 @@ import (
 	"encoding/json"
 	"time"
 	"github.com/robfig/cron"
-	"math/rand"
 	"path/filepath"
 	"os"
 )
 
 // TestCase is a pipeline data structure.
 type TestCase struct {
-	TaskID int
+	TaskName string
 	Name string
 	Path string
 	Target string
@@ -23,8 +22,9 @@ type TestCase struct {
 
 // Task records the parameters of a test run.
 type Task struct {
+	Schedule string
 	// resource identifier to find this task again.
-	TaskID int `json:"-"`
+	TaskName string
 	// defines a list of resources to target
 	Targets []string
 	// defines a list of tests to run by path
@@ -38,8 +38,8 @@ type Task struct {
 
 // Result records the result of a single test run for a task.
 type Result struct {
-	// taskID this result was retrieved for.
-	TaskID int
+	// TaskName this result was retrieved for.
+	TaskName string
 	// test name - the task can be used to recover the path
 	Name string
 	// target name - used with path, can reconstruct URL.
@@ -82,7 +82,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		c.AddFunc("@every 10s", taskJob(1, p, runner))
+		c.AddFunc(p.Schedule, taskJob(p, runner))
 	}
 	c.Start()
 
@@ -95,14 +95,11 @@ func main() {
 
 // taskJob represents a diagnostic testing task that can be
 // scheduled.
-func taskJob(id int, p Task, runner chan TestCase) cron.FuncJob {
+func taskJob(p Task, runner chan TestCase) cron.FuncJob {
 	return func() {
-		id = rand.Int()
-		fmt.Printf("Running %d\n", id)
+		fmt.Printf("Running %s\n", p.TaskName)
 
 		// outer product of targets and tests.
-		p.TaskID = id
-
 		callback := make(chan Result)
 
 		expected := len(p.Targets) * len(p.Tests)
@@ -118,9 +115,9 @@ func taskJob(id int, p Task, runner chan TestCase) cron.FuncJob {
 				}
 				if !more || j >= expected {
 					// Write out results
-					fmt.Printf("All done with %d:\n", id)
+					fmt.Printf("All done with %s:\n", p.TaskName)
 					for _, k := range results {
-						fmt.Printf("  #%d %s @ %s \n    %v -> %s\n",  k.TaskID, k.Name, k.RunTime.Format(time.RFC3339), k.Result, k.Note)
+						fmt.Printf("  [%s] %s @ %s \n    %v -> %s\n",  k.TaskName, k.Name, k.RunTime.Format(time.RFC3339), k.Result, k.Note)
 					}
 					close(callback)
 					return
@@ -135,7 +132,7 @@ func taskJob(id int, p Task, runner chan TestCase) cron.FuncJob {
 					Path: t.Path,
 					Name: t.Name,
 					Target: tgt,
-					TaskID: p.TaskID,
+					TaskName: p.TaskName,
 					Callback: callback,
 				}
 			}
@@ -168,7 +165,7 @@ func Retrieve(in <-chan TestCase) {
 			}
 
 			tr := Result{}
-			tr.TaskID = i.TaskID
+			tr.TaskName = i.TaskName
 			tr.Name = i.Name
 			tr.Target = i.Target
 			tr.Result = r.Result

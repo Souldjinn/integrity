@@ -1,4 +1,6 @@
 {
+  "taskname": "big task",
+  "schedule": "@every 10s",
   "targets": [
     "1234",
     "5556",
