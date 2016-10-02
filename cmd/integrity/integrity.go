@@ -67,7 +67,7 @@ func main() {
 
 	runner := make(chan TestCase)
 	// number of retrieval request workers.
-	for w := 0; w < 4; w++ {
+	for w := 0; w < 5; w++ {
 		Retrieve(runner)
 	}
 
@@ -87,10 +87,6 @@ func main() {
 // scheduled.
 func taskJob(id int, file string, runner chan TestCase) cron.FuncJob {
 	return func() {
-		// TODO http worker queue
-		// need to send a channel that the http results can be
-		// fed back into.
-
 		// TODO in memory storage
 
 		fmt.Printf("Running %d\n", id)
@@ -105,13 +101,31 @@ func taskJob(id int, file string, runner chan TestCase) cron.FuncJob {
 		p.TaskID = id
 
 		callback := make(chan Result)
+
+		expected := len(p.Targets) * len(p.Tests)
 		go func() {
-			for i := range callback {
-				fmt.Printf("  #%d %s @ %s \n    %v -> %s\n",  i.TaskID, i.Name, i.RunTime.Format(time.RFC3339), i.Result, i.Note)
+			j := 0
+			results := make([]Result, 0)
+			for {
+				j++
+				i, more := <-callback
+				if more {
+					// Collect results
+					results = append(results, i)
+				}
+				if !more || j >= expected {
+					// Write out results
+					fmt.Printf("All done with %d:\n", id)
+					for _, k := range results {
+						fmt.Printf("  #%d %s @ %s \n    %v -> %s\n",  k.TaskID, k.Name, k.RunTime.Format(time.RFC3339), k.Result, k.Note)
+					}
+					close(callback)
+					return
+				}
 			}
 		}()
 
-		// sends outer product of targets and test to http pipeline.
+		// sends outer product of targets and test to http queue.
 		for _, tgt := range p.Targets {
 			for _, t := range p.Tests {
 				runner <- TestCase{
