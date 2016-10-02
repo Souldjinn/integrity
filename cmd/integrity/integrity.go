@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"time"
 	"github.com/robfig/cron"
-	"os"
 )
 
 // TestCase is a pipeline data structure.
@@ -65,9 +64,23 @@ func main() {
 	fmt.Println("Act with integrity.")
 
 	c := cron.New()
-	c.AddFunc("@every 10s", func(){
-		fmt.Println("Running")
-		dat, err := ioutil.ReadFile(os.Args[1])
+	c.AddFunc("@every 10s", taskJob(1, "test1.json"))
+	c.AddFunc("@every 10s", taskJob(2, "test2.json"))
+	c.Start()
+
+	// wait forever and let cron do its thing- may
+	// be replaced with an http handler eventually.
+	for {
+
+	}
+}
+
+// taskJob represents a diagnostic testing task that can be
+// scheduled.
+func taskJob(id int, file string) cron.FuncJob {
+	return func() {
+		fmt.Printf("Running %d", id)
+		dat, err := ioutil.ReadFile(file)
 		if err != nil {
 			panic(err)
 		}
@@ -75,7 +88,7 @@ func main() {
 		json.Unmarshal(dat, &p)
 
 		// outer product of targets and tests.
-		p.TaskID = 1
+		p.TaskID = id
 
 		in := make(chan TestCase)
 		Print(Retrieve(in))
@@ -91,13 +104,6 @@ func main() {
 			}
 		}
 		close(in)
-	})
-	c.Start()
-
-	// wait forever and let cron do its thing- may
-	// be replaced with an http handler eventually.
-	for {
-
 	}
 }
 
