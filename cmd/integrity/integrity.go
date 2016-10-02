@@ -18,6 +18,7 @@ import (
 	"io/ioutil"
 	"encoding/json"
 	"time"
+	"github.com/robfig/cron"
 	"os"
 )
 
@@ -63,30 +64,41 @@ type Result struct {
 func main() {
 	fmt.Println("Act with integrity.")
 
-	dat, err := ioutil.ReadFile(os.Args[1])
-	if err != nil {
-		panic(err)
-	}
-	var p Task
-	json.Unmarshal(dat, &p)
+	c := cron.New()
+	c.AddFunc("@every 10s", func(){
+		fmt.Println("Running")
+		dat, err := ioutil.ReadFile(os.Args[1])
+		if err != nil {
+			panic(err)
+		}
+		var p Task
+		json.Unmarshal(dat, &p)
 
-	// outer product of targets and tests.
-	p.TaskID = 1
+		// outer product of targets and tests.
+		p.TaskID = 1
 
-	in := make(chan TestCase)
-	Print(Retrieve(in))
+		in := make(chan TestCase)
+		Print(Retrieve(in))
 
-	for _, tgt := range p.Targets {
-		for _, t := range p.Tests {
-			in <- TestCase{
-				Path: t.Path,
-				Name: t.Name,
-				Target: tgt,
-				TaskID: p.TaskID,
+		for _, tgt := range p.Targets {
+			for _, t := range p.Tests {
+				in <- TestCase{
+					Path: t.Path,
+					Name: t.Name,
+					Target: tgt,
+					TaskID: p.TaskID,
+				}
 			}
 		}
+		close(in)
+	})
+	c.Start()
+
+	// wait forever and let cron do its thing- may
+	// be replaced with an http handler eventually.
+	for {
+
 	}
-	close(in)
 }
 
 func Retrieve(in <-chan TestCase) (<-chan Result) {

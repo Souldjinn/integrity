@@ -12,6 +12,5 @@ sleep 2
 trap "kill $PIDX; kill $PIDY" SIGINT SIGTERM EXIT
 
 integrity test1.json
-integrity test2.json
 
 echo
