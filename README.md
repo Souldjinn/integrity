@@ -150,10 +150,105 @@ Conclusion:
     - Interestingly, this means results can be cached! Of course, we may need to retain
       detailed historical data (can't think of why, but you never know).
 
-Intermission:
+**Intermission:**
 
  * Tasks are a list of targets and tests and can't change after creation.
 
  * Tasks run on a fixed schedule.
 
  * The most recent results for a task can be polled.
+
+ * The core of this system is a cron-like schedule.
+
+## Design Parameters, Second Iteration
+
+### System Architecture
+Its a cron task that start building a new integrity report that, once complete, replaces
+the current report. The current report won't be replaced if a new report can't
+be successfully created- which might happen due to a system crash or an inability to
+contact backend services for a prolonged period of time.
+
+Right now, my guess at how the system might work: cron boots up a list of tasks to execute.
+These tasks allocate memory to hold the new report as its constructed. They use a job/worker
+scheme to execute the test HTTP requests in parallel.
+
+The possible bottlenecks will likely be around memory constraints, inflamed by (1) too many
+resources in a cohort, (2) too many tests in a task, (3) too many tasks at the same time.
+Mitigation for all these is fairly easy: 1 & 2 can be solved by limiting the product of
+resources and tests in a task and 3 can be solved by better scheduling or a job system. I'd
+prefer better scheduling because a job/worker that kicks off to another job/worker bothers
+me deeply. However, until these issues actually present, my vote is to do nothing.
+
+### Design Parameter: Task Creation.
+
+Options:
+
+ * Expose an API over the web. This would best support ad-hoc task creation by non-engineering
+   personnel and could be wired into a UI somewhere. We'd need to have a database under the hood
+   and I'd rather avoid that complexity.
+
+ * Use files in S3. Other systems could create tasks by dropping files in S3. To some extent,
+   I don't want to encourage this practice because it creates circular dependencies (THIS APPLIES
+   TO SOME OF MY REJECTED IDEAS ABOVE- just didn't have the right words).
+
+ * Use files in the deployed container. This would cater most to the engineers, come with version
+   control and be the simplest to implement. My main concern is open-source opportunities, since
+   we wouldn't want to expose our own tasks. This would require having a repository of our tasks
+   and a repository for the actual meat-and-potatoes service.
+
+Discussion:
+
+ * I'm going to riff with the third option: assuming the service accepted a directory as an
+   argument, the files could be built into a container for deployment. This would also make
+   local development embarrassingly simple.
+
+    - Dockerfile runs `go get integrity` and `git clone integrity-tasks` then runs integrity
+      with the integrity-tasks directory.
+
+### Design Parameter: Reporting Artifacts.
+
+Options:
+
+ * Send out a standard set of statsd metrics to measure progress over time. List of
+   metrics I think would be very useful bucketed by task.
+
+    - report started count - this could be used as an annotation to see how often a report
+      is being run.
+
+    - report available count - this could be used as an annotation in a dashboard to show
+      how long reports are taking
+
+    - report available timing - this could be used to show the performance of the integrity
+      system.
+
+    - test pass/fail - over time, this lets us ensure our system integrity and measure
+      progress and regressions.
+
+ * Keep a machine readable copy of the most recently completed report. My guess is that
+   this could be stored in the go process or a volatile cache. Using in-memory go eliminates
+   a dependency (we could use go-memdb, bolt, etc). A major problem is that every deployment
+   would wipe out all the results. Options to fix: (1) run all tasks frequently, (2) use
+   a durable database.
+
+ * Keep an analytics database of reports. Arguably, we could implement this separately
+   by polling task endpoints and using an ETL strategy. That would keep the database and
+   data wrangling logic out of the situation, which makes our lives way easier.
+
+Discussion:
+
+ * Send out statsd, be okay with compromising durability and store results in-memory.
+
+ * Add durability if memory becomes overwhelming or can't keep a server up. Consider
+   limiting the sum of products of resources and test across all tasks if memory is
+   an issue.
+
+
+**Intermission:**
+
+ * tasks saved as files and executed like a cronjob.
+
+ * task status and recent reports exposed via an API.
+
+ * reports saved in memory, durability intentionally reduced.
+
+ * statsd sent out as tasks are run.s
