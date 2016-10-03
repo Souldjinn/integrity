@@ -1,9 +1,8 @@
 package integrity
 
 import (
-	"time"
-	"fmt"
 	"github.com/robfig/cron"
+	"time"
 )
 
 // Task records the parameters of a test run.
@@ -22,6 +21,7 @@ type Task struct {
 	}
 }
 
+// TaskResults represent the results of running a task.
 type TaskResults struct {
 	Task
 	StartTime  time.Time
@@ -29,18 +29,12 @@ type TaskResults struct {
 	Results    []Result
 }
 
-// taskJob represents a diagnostic testing task that can be
-// scheduled.
+// TaskJob represents a diagnostic testing task that can be scheduled.
 func TaskJob(r chan TaskResults, p Task, runner chan TestCase) cron.FuncJob {
 	return func() {
 		q := TaskResults{}
 		q.StartTime = time.Now()
-
-		fmt.Printf("Running %s\n", p.TaskName)
-
-		// outer product of targets and tests.
 		callback := make(chan Result)
-
 		expected := len(p.Targets) * len(p.Tests)
 		go func() {
 			j := 0
@@ -57,18 +51,11 @@ func TaskJob(r chan TaskResults, p Task, runner chan TestCase) cron.FuncJob {
 					q.FinishTime = time.Now()
 					q.Results = results
 					r <- q
-					// Write out results
-					fmt.Printf("All done with %s:\n", p.TaskName)
-					for _, k := range results {
-						fmt.Printf("  [%s] %s @ %s \n    %v -> %s\n", k.TaskName, k.Name, k.RunTime.Format(time.RFC3339), k.Result, k.Note)
-					}
 					close(callback)
 					return
 				}
 			}
 		}()
-
-		// sends outer product of targets and test to http queue.
 		for _, tgt := range p.Targets {
 			for _, t := range p.Tests {
 				runner <- TestCase{

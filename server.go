@@ -6,15 +6,19 @@ import (
 	"net/http"
 )
 
+// Integrity manages and displays shared mutable state
 type Integrity struct {
 	TestResults map[string]TaskResults
-	ResultChan chan TaskResults
+	ResultChan  chan TaskResults
 }
 
+// NewIntegrityServer creates an instance of integrity
+// than can be used as an HTTP server. Writes to shared
+// mutable state are handled by a goroutine and channel.
 func NewIntegrityServer() *Integrity {
 	i := &Integrity{
 		TestResults: make(map[string]TaskResults, 0),
-		ResultChan: make(chan TaskResults),
+		ResultChan:  make(chan TaskResults),
 	}
 	// manage access to mutable state
 	go func() {

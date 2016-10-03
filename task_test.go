@@ -1,10 +1,9 @@
 package integrity_test
 
 import (
-	"testing"
 	"github.com/bigcommerce-labs/integrity"
+	"testing"
 	"time"
-	"fmt"
 )
 
 func TestTaskJob(t *testing.T) {
@@ -15,13 +14,17 @@ func TestTaskJob(t *testing.T) {
 			"1234",
 			"4567",
 		},
-		Tests: []struct{
+		Tests: []struct {
 			Name string
 			Path string
 		}{
 			{
 				Name: "hello",
-				Path: "http://example.org/test/%s",
+				Path: "http://example.org/test1/%s",
+			},
+			{
+				Name: "hello",
+				Path: "http://example.org/test2/%s",
 			},
 		},
 	}
@@ -33,11 +36,11 @@ func TestTaskJob(t *testing.T) {
 		for t := range tests {
 			t.Callback <- integrity.Result{
 				TaskName: "task_name",
-				Name: "test_name",
-				Target: "target",
-				RunTime: time.Now(),
-				Result: true,
-				Note: "fake result",
+				Name:     "test_name",
+				Target:   "target",
+				RunTime:  time.Now(),
+				Result:   true,
+				Note:     "fake result",
 			}
 		}
 	}()
@@ -46,5 +49,8 @@ func TestTaskJob(t *testing.T) {
 
 	out := <-results
 
-	fmt.Printf("%+v\n", out)
+	if len(out.Results) != 4 {
+		t.Logf("not enough results! got %d wanted %d", len(out.Results), 4)
+		t.Fail()
+	}
 }

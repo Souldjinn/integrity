@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# This script validates the codebase.
+
 set +e
 
 # format code

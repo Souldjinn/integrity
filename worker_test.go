@@ -2,14 +2,12 @@ package integrity_test
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/bigcommerce-labs/integrity"
 	"io/ioutil"
 	"net/http"
 	"testing"
-	"fmt"
 )
-
-
 
 // Wires up a TestWorker to channels and a stubbed http client
 // and inspects the results.
@@ -17,69 +15,69 @@ func TestTestWorker(t *testing.T) {
 	tests := make(chan integrity.TestCase)
 	results := make(chan integrity.Result)
 
-	samples := map[string]struct{
-		responseCode int
-		responseBody string
-		responseError error
-		taskName string
-		testName string
-		target string
-		path string
+	samples := map[string]struct {
+		responseCode   int
+		responseBody   string
+		responseError  error
+		taskName       string
+		testName       string
+		target         string
+		path           string
 		expectedResult bool
-		expectedNote string
-	} {
+		expectedNote   string
+	}{
 		"run passing test": {
-			responseCode: 200,
-			responseBody: `{"result":true,"note":"passing test"}`,
+			responseCode:   200,
+			responseBody:   `{"result":true,"note":"passing test"}`,
 			responseError:  nil,
-			taskName: "unit",
-			testName: "random_test",
-			target:   "1234",
-			path: "http://example.org/test/%s",
+			taskName:       "unit",
+			testName:       "random_test",
+			target:         "1234",
+			path:           "http://example.org/test/%s",
 			expectedResult: true,
 			expectedNote:   "passing test",
 		},
 		"run failing test": {
-			responseCode: 200,
-			responseBody: `{"result":false,"note":"failing test"}`,
+			responseCode:   200,
+			responseBody:   `{"result":false,"note":"failing test"}`,
 			responseError:  nil,
-			taskName: "unit",
-			testName: "random_test",
-			target:   "1234",
-			path: "http://example.org/test/%s",
+			taskName:       "unit",
+			testName:       "random_test",
+			target:         "1234",
+			path:           "http://example.org/test/%s",
 			expectedResult: false,
 			expectedNote:   "failing test",
 		},
 		"response is garbled": {
-			responseCode: 200,
-			responseBody: `{"result":false"note":"failing test"}`,
+			responseCode:   200,
+			responseBody:   `{"result":false"note":"failing test"}`,
 			responseError:  nil,
-			taskName: "unit",
-			testName: "random_test",
-			target:   "1234",
-			path: "http://example.org/test/%s",
+			taskName:       "unit",
+			testName:       "random_test",
+			target:         "1234",
+			path:           "http://example.org/test/%s",
 			expectedResult: false,
 			expectedNote:   `invalid character '"' after object key:value pair`,
 		},
 		"request fails": {
-			responseCode: 200,
-			responseBody: `{"result":false"note":"failing test"}`,
+			responseCode:   200,
+			responseBody:   `{"result":false"note":"failing test"}`,
 			responseError:  fmt.Errorf("http error"),
-			taskName: "unit",
-			testName: "random_test",
-			target:   "1234",
-			path: "http://example.org/test/%s",
+			taskName:       "unit",
+			testName:       "random_test",
+			target:         "1234",
+			path:           "http://example.org/test/%s",
 			expectedResult: false,
 			expectedNote:   `Get http://example.org/test/1234: http error`,
 		},
 		"status code not OK": {
-			responseCode: 500,
-			responseBody: `{"result":true,"note":"passing test"}`,
+			responseCode:   500,
+			responseBody:   `{"result":true,"note":"passing test"}`,
 			responseError:  nil,
-			taskName: "unit",
-			testName: "random_test",
-			target:   "1234",
-			path: "http://example.org/test/%s",
+			taskName:       "unit",
+			testName:       "random_test",
+			target:         "1234",
+			path:           "http://example.org/test/%s",
 			expectedResult: false,
 			expectedNote:   "status code: 500",
 		},
@@ -90,7 +88,7 @@ func TestTestWorker(t *testing.T) {
 		client.Transport = T{
 			Code: s.responseCode,
 			Body: s.responseBody,
-			Err: s.responseError,
+			Err:  s.responseError,
 		}
 		integrity.TestWorker(client, tests)
 		tests <- integrity.TestCase{

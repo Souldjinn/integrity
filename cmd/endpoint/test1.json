@@ -1,5 +1,4 @@
 {
-  "taskname" : "small task",
   "schedule" : "@every 10s",
   "targets": [
     "1234",
