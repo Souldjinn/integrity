@@ -1,23 +1,31 @@
+// TODO kill zombie tasks
+// TODO detect leaks
+// TODO serve result sets live
+// TODO serve status (# routines, memory, etc)
+// TODO wire in statsd
+// TODO auth on production
+// TODO testing and standards
+// TODO deployment
 package main
 
 import (
-	"fmt"
-	"net/http"
-	"io/ioutil"
 	"encoding/json"
-	"time"
+	"fmt"
 	"github.com/robfig/cron"
-	"path/filepath"
-	"os"
+	"io/ioutil"
 	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
 )
 
 // TestCase is a pipeline data structure.
 type TestCase struct {
 	TaskName string
-	Name string
-	Path string
-	Target string
+	Name     string
+	Path     string
+	Target   string
 	Callback chan Result
 }
 
@@ -29,7 +37,7 @@ type Task struct {
 	// defines a list of resources to target
 	Targets []string
 	// defines a list of tests to run by path
-	Tests   []struct{
+	Tests []struct {
 		// name unifies lets you compare results across tasks and targets, even if path changes
 		Name string
 		// path is a URL with %s that takes a target and gets back results
@@ -37,13 +45,12 @@ type Task struct {
 	}
 }
 
-type TaskResults struct {
+type taskResults struct {
 	Task
-	StartTime time.Time
+	StartTime  time.Time
 	FinishTime time.Time
-	Results []Result
+	Results    []Result
 }
-
 
 // Result records the result of a single test run for a task.
 type Result struct {
@@ -61,19 +68,14 @@ type Result struct {
 	Note string
 }
 
-var testresults map[string]TaskResults = make(map[string]TaskResults, 0)
+var testresults = make(map[string]taskResults, 0)
 
 func main() {
 	fmt.Println("Act with integrity.")
-	// TODO kill zombie tasks
-	// TODO serve result sets live
-	// TODO serve status (# routines, memory, etc)
-	// TODO wire in statsd
-
 	runner := make(chan TestCase)
 	// number of retrieval request workers.
 	for w := 0; w < 5; w++ {
-		Retrieve(runner)
+		retrieve(runner)
 	}
 
 	// add all the tasks.
@@ -94,7 +96,7 @@ func main() {
 		}
 
 		base := filepath.Base(f)
-		p.TaskName = base[0:len(base)-len(filepath.Ext(base))]
+		p.TaskName = base[0 : len(base)-len(filepath.Ext(base))]
 
 		c.AddFunc(p.Schedule, taskJob(p, runner))
 	}
@@ -102,11 +104,11 @@ func main() {
 
 	// wait forever and let cron do its thing- may
 	// be replaced with an http handler eventually.
-	http.HandleFunc("/", ServeHTTP)
+	http.HandleFunc("/", serveHTTP)
 	log.Fatal(http.ListenAndServe("0.0.0.0:4567", nil))
 }
 
-func ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	test := r.URL.Query().Get("test")
 	if test != "" {
 		if r, ok := testresults[test]; ok {
@@ -123,8 +125,8 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// index page - show list of tests
-		s := make([]string, 0)
-		for k, _ := range testresults {
+		var s []string
+		for k := range testresults {
 			s = append(s, k)
 		}
 		m, err := json.MarshalIndent(s, "", "  ")
@@ -139,7 +141,7 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // scheduled.
 func taskJob(p Task, runner chan TestCase) cron.FuncJob {
 	return func() {
-		q := TaskResults{}
+		q := taskResults{}
 		q.StartTime = time.Now()
 
 		fmt.Printf("Running %s\n", p.TaskName)
@@ -150,7 +152,7 @@ func taskJob(p Task, runner chan TestCase) cron.FuncJob {
 		expected := len(p.Targets) * len(p.Tests)
 		go func() {
 			j := 0
-			results := make([]Result, 0)
+			var results []Result
 			for {
 				j++
 				i, more := <-callback
@@ -166,7 +168,7 @@ func taskJob(p Task, runner chan TestCase) cron.FuncJob {
 					// Write out results
 					fmt.Printf("All done with %s:\n", p.TaskName)
 					for _, k := range results {
-						fmt.Printf("  [%s] %s @ %s \n    %v -> %s\n",  k.TaskName, k.Name, k.RunTime.Format(time.RFC3339), k.Result, k.Note)
+						fmt.Printf("  [%s] %s @ %s \n    %v -> %s\n", k.TaskName, k.Name, k.RunTime.Format(time.RFC3339), k.Result, k.Note)
 					}
 					close(callback)
 					return
@@ -178,9 +180,9 @@ func taskJob(p Task, runner chan TestCase) cron.FuncJob {
 		for _, tgt := range p.Targets {
 			for _, t := range p.Tests {
 				runner <- TestCase{
-					Path: t.Path,
-					Name: t.Name,
-					Target: tgt,
+					Path:     t.Path,
+					Name:     t.Name,
+					Target:   tgt,
 					TaskName: p.TaskName,
 					Callback: callback,
 				}
@@ -189,7 +191,7 @@ func taskJob(p Task, runner chan TestCase) cron.FuncJob {
 	}
 }
 
-func Retrieve(in <-chan TestCase) {
+func retrieve(in <-chan TestCase) {
 	go func() {
 		for i := range in {
 			client := http.DefaultClient
@@ -206,7 +208,7 @@ func Retrieve(in <-chan TestCase) {
 
 			var r struct {
 				Result bool
-				Note string
+				Note   string
 			}
 			err = json.Unmarshal(body, &r)
 			if err != nil {

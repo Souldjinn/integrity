@@ -5,17 +5,17 @@
 package main
 
 import (
-	"net/http"
-	"log"
-	"fmt"
 	"encoding/json"
 	"flag"
+	"fmt"
+	"log"
+	"net/http"
 	"time"
 )
 
-type Result struct {
+type result struct {
 	Result bool
-	Note string
+	Note   string
 }
 
 func main() {
@@ -23,17 +23,17 @@ func main() {
 	flag.Parse()
 	mux := http.DefaultServeMux
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(2*time.Second)
-		result := Result{
+		time.Sleep(2 * time.Second)
+		body := result{
 			Result: true,
-			Note: fmt.Sprintf("test ran on %d and %s", *port, r.URL.Path),
+			Note:   fmt.Sprintf("test ran on %d and %s", *port, r.URL.Path),
 		}
-		if v, err := json.MarshalIndent(result, "", "  "); err != nil {
+		if v, err := json.MarshalIndent(body, "", "  "); err != nil {
 			panic(err)
 		} else {
 			fmt.Fprint(w, string(v))
 		}
 	})
-	fmt.Printf(fmt.Sprintf("Serving on 0.0.0.0:%d\n", *port))
+	fmt.Printf("Serving on 0.0.0.0:%d\n", *port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", *port), mux))
 }
