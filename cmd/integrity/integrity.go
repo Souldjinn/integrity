@@ -1,16 +1,15 @@
-// TODO kill zombie tasks
-// TODO detect leaks
-// TODO serve result sets live
-// TODO serve status (# routines, memory, etc)
-// TODO wire in statsd
-// TODO auth on production
-// TODO testing and standards
-// TODO deployment
+// TODO
+//   zombie tasks
+//   routine, memory leaks
+//   race conditions
+//   regressions
+//   edge cases (404s, test run failures, panics)
 package main
 
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/bigcommerce-labs/integrity"
 	"github.com/robfig/cron"
 	"io/ioutil"
 	"log"
@@ -19,15 +18,6 @@ import (
 	"path/filepath"
 	"time"
 )
-
-// TestCase is a pipeline data structure.
-type TestCase struct {
-	TaskName string
-	Name     string
-	Path     string
-	Target   string
-	Callback chan Result
-}
 
 // Task records the parameters of a test run.
 type Task struct {
@@ -49,33 +39,17 @@ type taskResults struct {
 	Task
 	StartTime  time.Time
 	FinishTime time.Time
-	Results    []Result
-}
-
-// Result records the result of a single test run for a task.
-type Result struct {
-	// TaskName this result was retrieved for.
-	TaskName string
-	// test name - the task can be used to recover the path
-	Name string
-	// target name - used with path, can reconstruct URL.
-	Target string
-	// time when result retrieved.
-	RunTime time.Time
-	// result value
-	Result bool
-	// human-readable explanation.
-	Note string
+	Results    []integrity.Result
 }
 
 var testresults = make(map[string]taskResults, 0)
 
 func main() {
 	fmt.Println("Act with integrity.")
-	runner := make(chan TestCase)
+	tests := make(chan integrity.TestCase)
 	// number of retrieval request workers.
 	for w := 0; w < 5; w++ {
-		retrieve(runner)
+		integrity.TestWorker(tests)
 	}
 
 	// add all the tasks.
@@ -98,7 +72,7 @@ func main() {
 		base := filepath.Base(f)
 		p.TaskName = base[0 : len(base)-len(filepath.Ext(base))]
 
-		c.AddFunc(p.Schedule, taskJob(p, runner))
+		c.AddFunc(p.Schedule, taskJob(p, tests))
 	}
 	c.Start()
 
@@ -139,7 +113,7 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 
 // taskJob represents a diagnostic testing task that can be
 // scheduled.
-func taskJob(p Task, runner chan TestCase) cron.FuncJob {
+func taskJob(p Task, runner chan integrity.TestCase) cron.FuncJob {
 	return func() {
 		q := taskResults{}
 		q.StartTime = time.Now()
@@ -147,12 +121,12 @@ func taskJob(p Task, runner chan TestCase) cron.FuncJob {
 		fmt.Printf("Running %s\n", p.TaskName)
 
 		// outer product of targets and tests.
-		callback := make(chan Result)
+		callback := make(chan integrity.Result)
 
 		expected := len(p.Targets) * len(p.Tests)
 		go func() {
 			j := 0
-			var results []Result
+			var results []integrity.Result
 			for {
 				j++
 				i, more := <-callback
@@ -179,7 +153,7 @@ func taskJob(p Task, runner chan TestCase) cron.FuncJob {
 		// sends outer product of targets and test to http queue.
 		for _, tgt := range p.Targets {
 			for _, t := range p.Tests {
-				runner <- TestCase{
+				runner <- integrity.TestCase{
 					Path:     t.Path,
 					Name:     t.Name,
 					Target:   tgt,
@@ -189,40 +163,4 @@ func taskJob(p Task, runner chan TestCase) cron.FuncJob {
 			}
 		}
 	}
-}
-
-func retrieve(in <-chan TestCase) {
-	go func() {
-		for i := range in {
-			client := http.DefaultClient
-
-			resp, err := client.Get(fmt.Sprintf(i.Path, i.Target))
-			if err != nil {
-				panic(err)
-			}
-
-			body, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				panic(err)
-			}
-
-			var r struct {
-				Result bool
-				Note   string
-			}
-			err = json.Unmarshal(body, &r)
-			if err != nil {
-				panic(err)
-			}
-
-			tr := Result{}
-			tr.TaskName = i.TaskName
-			tr.Name = i.Name
-			tr.Target = i.Target
-			tr.Result = r.Result
-			tr.Note = r.Note
-			tr.RunTime = time.Now()
-			i.Callback <- tr
-		}
-	}()
 }
