@@ -40,33 +40,50 @@ type Result struct {
 func TestWorker(client *http.Client, tests <-chan TestCase) {
 	go func() {
 		for i := range tests {
-			resp, err := client.Get(fmt.Sprintf(i.Path, i.Target))
-			if err != nil {
-				panic(err)
-			}
-
-			body, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				panic(err)
-			}
-
-			var r struct {
-				Result bool
-				Note   string
-			}
-			err = json.Unmarshal(body, &r)
-			if err != nil {
-				panic(err)
-			}
-
-			tr := Result{}
-			tr.TaskName = i.TaskName
-			tr.Name = i.Name
-			tr.Target = i.Target
-			tr.Result = r.Result
-			tr.Note = r.Note
-			tr.RunTime = time.Now()
-			i.Callback <- tr
+			i.Callback <- runTest(client, i)
 		}
 	}()
+}
+
+func runTest(client *http.Client, i TestCase) Result {
+	tr := Result{}
+	tr.TaskName = i.TaskName
+	tr.Name = i.Name
+	tr.Target = i.Target
+	tr.RunTime = time.Now()
+
+	resp, err := client.Get(fmt.Sprintf(i.Path, i.Target))
+	if err != nil {
+		tr.Result = false
+		tr.Note = err.Error()
+		return tr
+	}
+
+	if resp.StatusCode != 200 {
+		tr.Result = false
+		tr.Note = fmt.Sprintf("status code: %d", resp.StatusCode)
+		return tr
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		tr.Result = false
+		tr.Note = err.Error()
+		return tr
+	}
+
+	var r struct {
+		Result bool
+		Note   string
+	}
+	err = json.Unmarshal(body, &r)
+	if err != nil {
+		tr.Result = false
+		tr.Note = err.Error()
+		return tr
+	}
+
+	tr.Result = r.Result
+	tr.Note = r.Note
+	return tr
 }
