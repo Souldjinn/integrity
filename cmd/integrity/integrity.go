@@ -37,6 +37,12 @@ type Task struct {
 	}
 }
 
+type TaskResults struct {
+	Task
+	Results []Result
+}
+
+
 // Result records the result of a single test run for a task.
 type Result struct {
 	// TaskName this result was retrieved for.
@@ -53,7 +59,7 @@ type Result struct {
 	Note string
 }
 
-var testresults map[string][]Result = make(map[string][]Result, 0)
+var testresults map[string]TaskResults = make(map[string]TaskResults, 0)
 
 func main() {
 	fmt.Println("Act with integrity.")
@@ -99,9 +105,11 @@ func main() {
 }
 
 func ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	for n, r := range testresults {
-		fmt.Fprintf(w, "%s => %+v\n", n, r)
+	m, err := json.MarshalIndent(testresults, "", "  ")
+	if err != nil {
+		panic(err)
 	}
+	fmt.Fprintf(w, "%s\n", m)
 }
 
 // taskJob represents a diagnostic testing task that can be
@@ -125,7 +133,10 @@ func taskJob(p Task, runner chan TestCase) cron.FuncJob {
 					results = append(results, i)
 				}
 				if !more || j >= expected {
-					testresults[p.TaskName] = results
+					q := TaskResults{}
+					q.Task = p
+					q.Results = results
+					testresults[p.TaskName] = q
 					// Write out results
 					fmt.Printf("All done with %s:\n", p.TaskName)
 					for _, k := range results {
