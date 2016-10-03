@@ -107,11 +107,32 @@ func main() {
 }
 
 func ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	m, err := json.MarshalIndent(testresults, "", "  ")
-	if err != nil {
-		panic(err)
+	test := r.URL.Query().Get("test")
+	if test != "" {
+		if r, ok := testresults[test]; ok {
+			// single test - show results
+			m, err := json.MarshalIndent(r, "", "  ")
+			if err != nil {
+				panic(err)
+			}
+			fmt.Fprintf(w, "%s\n", m)
+		} else {
+			// 404
+			w.WriteHeader(404)
+			fmt.Fprintf(w, "404 Not Found")
+		}
+	} else {
+		// index page - show list of tests
+		s := make([]string, 0)
+		for k, _ := range testresults {
+			s = append(s, k)
+		}
+		m, err := json.MarshalIndent(s, "", "  ")
+		if err != nil {
+			panic(err)
+		}
+		fmt.Fprintf(w, "%s\n", m)
 	}
-	fmt.Fprintf(w, "%s\n", m)
 }
 
 // taskJob represents a diagnostic testing task that can be
