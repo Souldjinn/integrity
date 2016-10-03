@@ -42,11 +42,18 @@ type taskResults struct {
 	Results    []integrity.Result
 }
 
-var testresults = make(map[string]taskResults, 0)
+type Integrity struct {
+	TestResults map[string]taskResults
+}
 
 func main() {
 	fmt.Println("Act with integrity.")
 	client := http.DefaultClient
+
+	intg := &Integrity{
+		TestResults: make(map[string]taskResults, 0),
+	}
+
 	tests := make(chan integrity.TestCase)
 	// number of retrieval request workers.
 	for w := 0; w < 5; w++ {
@@ -73,20 +80,19 @@ func main() {
 		base := filepath.Base(f)
 		p.TaskName = base[0 : len(base)-len(filepath.Ext(base))]
 
-		c.AddFunc(p.Schedule, taskJob(p, tests))
+		c.AddFunc(p.Schedule, taskJob(intg, p, tests))
 	}
 	c.Start()
 
 	// wait forever and let cron do its thing- may
 	// be replaced with an http handler eventually.
-	http.HandleFunc("/", serveHTTP)
-	log.Fatal(http.ListenAndServe("0.0.0.0:4567", nil))
+	log.Fatal(http.ListenAndServe("0.0.0.0:4567", intg))
 }
 
-func serveHTTP(w http.ResponseWriter, r *http.Request) {
+func (i *Integrity) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	test := r.URL.Query().Get("test")
 	if test != "" {
-		if r, ok := testresults[test]; ok {
+		if r, ok := i.TestResults[test]; ok {
 			// single test - show results
 			m, err := json.MarshalIndent(r, "", "  ")
 			if err != nil {
@@ -101,7 +107,7 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// index page - show list of tests
 		var s []string
-		for k := range testresults {
+		for k := range i.TestResults {
 			s = append(s, k)
 		}
 		m, err := json.MarshalIndent(s, "", "  ")
@@ -114,7 +120,7 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 
 // taskJob represents a diagnostic testing task that can be
 // scheduled.
-func taskJob(p Task, runner chan integrity.TestCase) cron.FuncJob {
+func taskJob(intg *Integrity, p Task, runner chan integrity.TestCase) cron.FuncJob {
 	return func() {
 		q := taskResults{}
 		q.StartTime = time.Now()
@@ -139,7 +145,7 @@ func taskJob(p Task, runner chan integrity.TestCase) cron.FuncJob {
 					q.Task = p
 					q.FinishTime = time.Now()
 					q.Results = results
-					testresults[p.TaskName] = q
+					intg.TestResults[p.TaskName] = q
 					// Write out results
 					fmt.Printf("All done with %s:\n", p.TaskName)
 					for _, k := range results {
