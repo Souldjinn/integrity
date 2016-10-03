@@ -9,6 +9,7 @@ import (
 	"github.com/robfig/cron"
 	"path/filepath"
 	"os"
+	"github.com/bigcommerce-labs/cp-middleware/log"
 )
 
 // TestCase is a pipeline data structure.
@@ -52,6 +53,8 @@ type Result struct {
 	Note string
 }
 
+var testresults map[string][]Result = make(map[string][]Result, 0)
+
 func main() {
 	fmt.Println("Act with integrity.")
 	// TODO kill zombie tasks
@@ -91,8 +94,13 @@ func main() {
 
 	// wait forever and let cron do its thing- may
 	// be replaced with an http handler eventually.
-	for {
+	http.HandleFunc("/", ServeHTTP)
+	log.Fatal(http.ListenAndServe("0.0.0.0:4567", nil))
+}
 
+func ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	for n, r := range testresults {
+		fmt.Fprintf(w, "%s => %+v\n", n, r)
 	}
 }
 
@@ -117,6 +125,7 @@ func taskJob(p Task, runner chan TestCase) cron.FuncJob {
 					results = append(results, i)
 				}
 				if !more || j >= expected {
+					testresults[p.TaskName] = results
 					// Write out results
 					fmt.Printf("All done with %s:\n", p.TaskName)
 					for _, k := range results {
