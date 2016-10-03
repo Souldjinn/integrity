@@ -9,7 +9,7 @@ import (
 	"github.com/robfig/cron"
 	"path/filepath"
 	"os"
-	"github.com/bigcommerce-labs/cp-middleware/log"
+	"log"
 )
 
 // TestCase is a pipeline data structure.
@@ -39,6 +39,8 @@ type Task struct {
 
 type TaskResults struct {
 	Task
+	StartTime time.Time
+	FinishTime time.Time
 	Results []Result
 }
 
@@ -116,6 +118,9 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // scheduled.
 func taskJob(p Task, runner chan TestCase) cron.FuncJob {
 	return func() {
+		q := TaskResults{}
+		q.StartTime = time.Now()
+
 		fmt.Printf("Running %s\n", p.TaskName)
 
 		// outer product of targets and tests.
@@ -133,8 +138,8 @@ func taskJob(p Task, runner chan TestCase) cron.FuncJob {
 					results = append(results, i)
 				}
 				if !more || j >= expected {
-					q := TaskResults{}
 					q.Task = p
+					q.FinishTime = time.Now()
 					q.Results = results
 					testresults[p.TaskName] = q
 					// Write out results
