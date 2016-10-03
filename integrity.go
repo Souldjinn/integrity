@@ -33,16 +33,13 @@ type Result struct {
 	Note string
 }
 
-
 // TestWorker reads tests out of a channel and runs them by
 // making an HTTP request to the appropriate test endpoint.
 // The results are sent back along a channel provided by the
 // test case to the original Task.
-func TestWorker(tests <-chan TestCase) {
+func TestWorker(client *http.Client, tests <-chan TestCase) {
 	go func() {
 		for i := range tests {
-			client := http.DefaultClient
-
 			resp, err := client.Get(fmt.Sprintf(i.Path, i.Target))
 			if err != nil {
 				panic(err)

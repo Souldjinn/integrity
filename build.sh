@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set +e
 
 # format code
 gofmt -l -w -s .
@@ -9,6 +9,11 @@ gofmt -l -w -s .
 gometalinter --deadline 30s ./... | grep -v "/usr/local/go/src"
 
 # attempt build
+HERE=`pwd`
 cd ./cmd/integrity
 go build
 go clean
+cd $HERE
+
+# run tests!
+go test

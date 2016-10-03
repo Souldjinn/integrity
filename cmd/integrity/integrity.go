@@ -46,10 +46,11 @@ var testresults = make(map[string]taskResults, 0)
 
 func main() {
 	fmt.Println("Act with integrity.")
+	client := http.DefaultClient
 	tests := make(chan integrity.TestCase)
 	// number of retrieval request workers.
 	for w := 0; w < 5; w++ {
-		integrity.TestWorker(tests)
+		integrity.TestWorker(client, tests)
 	}
 
 	// add all the tasks.
