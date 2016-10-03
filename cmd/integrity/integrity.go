@@ -18,11 +18,21 @@ import (
 	"path/filepath"
 )
 
+var testresults map[string]integrity.TaskResults
+
 func main() {
 	fmt.Println("Act with integrity.")
 	client := http.DefaultClient
 
-	intg := integrity.NewIntegrityServer()
+	testresults = make(map[string]integrity.TaskResults, 0)
+	testchan := make(chan integrity.TaskResults)
+
+	// manage access to mutable state
+	go func() {
+		for z := range testchan {
+			testresults[z.TaskName] = z
+		}
+	}()
 
 	tests := make(chan integrity.TestCase)
 	// number of retrieval request workers.
@@ -50,11 +60,41 @@ func main() {
 		base := filepath.Base(f)
 		p.TaskName = base[0 : len(base)-len(filepath.Ext(base))]
 
-		c.AddFunc(p.Schedule, integrity.TaskJob(intg.ResultChan, p, tests))
+		c.AddFunc(p.Schedule, integrity.TaskJob(testchan, p, tests))
 	}
 	c.Start()
 
 	// wait forever and let cron do its thing- may
 	// be replaced with an http handler eventually.
-	log.Fatal(http.ListenAndServe("0.0.0.0:4567", intg))
+	http.HandleFunc("/", serveHTTP)
+	log.Fatal(http.ListenAndServe("0.0.0.0:4567", nil))
+}
+
+func serveHTTP(w http.ResponseWriter, r *http.Request) {
+	test := r.URL.Query().Get("test")
+	if test != "" {
+		if r, ok := testresults[test]; ok {
+			// single test - show results
+			m, err := json.MarshalIndent(r, "", "  ")
+			if err != nil {
+				panic(err)
+			}
+			fmt.Fprintf(w, "%s\n", m)
+		} else {
+			// 404
+			w.WriteHeader(404)
+			fmt.Fprintf(w, "404 Not Found")
+		}
+	} else {
+		// index page - show list of tests
+		var s []string
+		for k := range testresults {
+			s = append(s, k)
+		}
+		m, err := json.MarshalIndent(s, "", "  ")
+		if err != nil {
+			panic(err)
+		}
+		fmt.Fprintf(w, "%s\n", m)
+	}
 }
