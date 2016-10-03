@@ -16,43 +16,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 )
-
-// Task records the parameters of a test run.
-type Task struct {
-	Schedule string
-	// resource identifier to find this task again.
-	TaskName string `json:"-"`
-	// defines a list of resources to target
-	Targets []string
-	// defines a list of tests to run by path
-	Tests []struct {
-		// name unifies lets you compare results across tasks and targets, even if path changes
-		Name string
-		// path is a URL with %s that takes a target and gets back results
-		Path string
-	}
-}
-
-type taskResults struct {
-	Task
-	StartTime  time.Time
-	FinishTime time.Time
-	Results    []integrity.Result
-}
-
-type Integrity struct {
-	TestResults map[string]taskResults
-}
 
 func main() {
 	fmt.Println("Act with integrity.")
 	client := http.DefaultClient
 
-	intg := &Integrity{
-		TestResults: make(map[string]taskResults, 0),
-	}
+	intg := integrity.NewIntegrityServer()
 
 	tests := make(chan integrity.TestCase)
 	// number of retrieval request workers.
@@ -71,7 +41,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		var p Task
+		var p integrity.Task
 		err = json.Unmarshal(dat, &p)
 		if err != nil {
 			panic(err)
@@ -80,94 +50,11 @@ func main() {
 		base := filepath.Base(f)
 		p.TaskName = base[0 : len(base)-len(filepath.Ext(base))]
 
-		c.AddFunc(p.Schedule, taskJob(intg, p, tests))
+		c.AddFunc(p.Schedule, integrity.TaskJob(intg, p, tests))
 	}
 	c.Start()
 
 	// wait forever and let cron do its thing- may
 	// be replaced with an http handler eventually.
 	log.Fatal(http.ListenAndServe("0.0.0.0:4567", intg))
-}
-
-func (i *Integrity) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	test := r.URL.Query().Get("test")
-	if test != "" {
-		if r, ok := i.TestResults[test]; ok {
-			// single test - show results
-			m, err := json.MarshalIndent(r, "", "  ")
-			if err != nil {
-				panic(err)
-			}
-			fmt.Fprintf(w, "%s\n", m)
-		} else {
-			// 404
-			w.WriteHeader(404)
-			fmt.Fprintf(w, "404 Not Found")
-		}
-	} else {
-		// index page - show list of tests
-		var s []string
-		for k := range i.TestResults {
-			s = append(s, k)
-		}
-		m, err := json.MarshalIndent(s, "", "  ")
-		if err != nil {
-			panic(err)
-		}
-		fmt.Fprintf(w, "%s\n", m)
-	}
-}
-
-// taskJob represents a diagnostic testing task that can be
-// scheduled.
-func taskJob(intg *Integrity, p Task, runner chan integrity.TestCase) cron.FuncJob {
-	return func() {
-		q := taskResults{}
-		q.StartTime = time.Now()
-
-		fmt.Printf("Running %s\n", p.TaskName)
-
-		// outer product of targets and tests.
-		callback := make(chan integrity.Result)
-
-		expected := len(p.Targets) * len(p.Tests)
-		go func() {
-			j := 0
-			var results []integrity.Result
-			for {
-				j++
-				i, more := <-callback
-				if more {
-					// Collect results
-					results = append(results, i)
-				}
-				if !more || j >= expected {
-					q.Task = p
-					q.FinishTime = time.Now()
-					q.Results = results
-					intg.TestResults[p.TaskName] = q
-					// Write out results
-					fmt.Printf("All done with %s:\n", p.TaskName)
-					for _, k := range results {
-						fmt.Printf("  [%s] %s @ %s \n    %v -> %s\n", k.TaskName, k.Name, k.RunTime.Format(time.RFC3339), k.Result, k.Note)
-					}
-					close(callback)
-					return
-				}
-			}
-		}()
-
-		// sends outer product of targets and test to http queue.
-		for _, tgt := range p.Targets {
-			for _, t := range p.Tests {
-				runner <- integrity.TestCase{
-					Path:     t.Path,
-					Name:     t.Name,
-					Target:   tgt,
-					TaskName: p.TaskName,
-					Callback: callback,
-				}
-			}
-		}
-	}
 }
