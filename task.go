@@ -22,7 +22,7 @@ type Task struct {
 	}
 }
 
-type taskResults struct {
+type TaskResults struct {
 	Task
 	StartTime  time.Time
 	FinishTime time.Time
@@ -31,9 +31,9 @@ type taskResults struct {
 
 // taskJob represents a diagnostic testing task that can be
 // scheduled.
-func TaskJob(intg *Integrity, p Task, runner chan TestCase) cron.FuncJob {
+func TaskJob(r chan TaskResults, p Task, runner chan TestCase) cron.FuncJob {
 	return func() {
-		q := taskResults{}
+		q := TaskResults{}
 		q.StartTime = time.Now()
 
 		fmt.Printf("Running %s\n", p.TaskName)
@@ -56,7 +56,7 @@ func TaskJob(intg *Integrity, p Task, runner chan TestCase) cron.FuncJob {
 					q.Task = p
 					q.FinishTime = time.Now()
 					q.Results = results
-					intg.TestResults[p.TaskName] = q
+					r <- q
 					// Write out results
 					fmt.Printf("All done with %s:\n", p.TaskName)
 					for _, k := range results {

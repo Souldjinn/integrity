@@ -50,7 +50,7 @@ func main() {
 		base := filepath.Base(f)
 		p.TaskName = base[0 : len(base)-len(filepath.Ext(base))]
 
-		c.AddFunc(p.Schedule, integrity.TaskJob(intg, p, tests))
+		c.AddFunc(p.Schedule, integrity.TaskJob(intg.ResultChan, p, tests))
 	}
 	c.Start()
 

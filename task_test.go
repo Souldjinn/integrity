@@ -8,7 +8,6 @@ import (
 )
 
 func TestTaskJob(t *testing.T) {
-	intg := integrity.NewIntegrityServer()
 	task := integrity.Task{
 		Schedule: "@every 10s",
 		TaskName: "test task",
@@ -29,6 +28,7 @@ func TestTaskJob(t *testing.T) {
 
 	// fake test runner.
 	tests := make(chan integrity.TestCase)
+	results := make(chan integrity.TaskResults)
 	go func() {
 		for t := range tests {
 			t.Callback <- integrity.Result{
@@ -42,10 +42,9 @@ func TestTaskJob(t *testing.T) {
 		}
 	}()
 
-	integrity.TaskJob(intg, task, tests)()
+	integrity.TaskJob(results, task, tests)()
 
-	// wait for tasks to be processed
-	time.Sleep(1*time.Second)
+	out := <-results
 
-	fmt.Printf("%+v\n", intg.TestResults)
+	fmt.Printf("%+v\n", out)
 }

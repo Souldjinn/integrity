@@ -7,13 +7,22 @@ import (
 )
 
 type Integrity struct {
-	TestResults map[string]taskResults
+	TestResults map[string]TaskResults
+	ResultChan chan TaskResults
 }
 
 func NewIntegrityServer() *Integrity {
-	return &Integrity{
-		TestResults: make(map[string]taskResults, 0),
+	i := &Integrity{
+		TestResults: make(map[string]TaskResults, 0),
+		ResultChan: make(chan TaskResults),
 	}
+	// manage access to mutable state
+	go func() {
+		for z := range i.ResultChan {
+			i.TestResults[z.TaskName] = z
+		}
+	}()
+	return i
 }
 
 func (i *Integrity) ServeHTTP(w http.ResponseWriter, r *http.Request) {
